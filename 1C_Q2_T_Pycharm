@@ -1,0 +1,63 @@
+import cv2
+import numpy as np
+import serial
+
+arduino = serial.Serial('COM4', 9600)
+
+def nothing(x):
+    pass
+
+cv2.namedWindow('Trackbars')
+cv2.createTrackbar('Hue_Low', 'Trackbars', 163, 255, nothing)
+cv2.createTrackbar('Hue_High', 'Trackbars', 255, 255, nothing)
+cv2.createTrackbar('Sat_Low', 'Trackbars', 82, 255, nothing)
+cv2.createTrackbar('Sat_High', 'Trackbars', 255, 255, nothing)
+cv2.createTrackbar('Val_Low', 'Trackbars', 123, 255, nothing)
+cv2.createTrackbar('Val_High', 'Trackbars', 255, 255, nothing)
+
+cap = cv2.VideoCapture(0)
+
+while True:
+    ret, img = cap.read()
+    if not ret:
+        print("Failed to grab frame")
+        break
+
+    frameHSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    Hue_Low = cv2.getTrackbarPos('Hue_Low', 'Trackbars')
+    Hue_High = cv2.getTrackbarPos('Hue_High', 'Trackbars')
+    Sat_Low = cv2.getTrackbarPos('Sat_Low', 'Trackbars')
+    Sat_High = cv2.getTrackbarPos('Sat_High', 'Trackbars')
+    Val_Low = cv2.getTrackbarPos('Val_Low', 'Trackbars')
+    Val_High = cv2.getTrackbarPos('Val_High', 'Trackbars')
+
+
+    fore_mask = cv2.inRange(frameHSV, (Hue_Low, Sat_Low, Val_Low), (Hue_High, Sat_High, Val_High))
+    fore = cv2.bitwise_and(img, img, mask=fore_mask)
+    # cv2.imshow('FGmask', FGmask)
+    # FG = cv2.bitwise_and(img, img, mask=FGmask)
+
+    contours, _ = cv2.findContours(fore_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    largest_area = 0
+    largest_contour = None
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if area > largest_area:
+            largest_area = area
+            largest_contour = contour
+
+    if largest_contour is not None:
+        x, y, w, h = cv2.boundingRect(largest_contour)
+        centerX = int((x + x + w) / 2)
+        centerY = int((y + y + h) / 2)
+        arduino.write(f"{centerX},{centerY}\n".encode())
+        cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+    cv2.imshow('fore_mask', fore_mask)
+    cv2.imshow('fore', fore)
+    cv2.imshow('Frame', img)
+    if cv2.waitKey(1) == 27:
+        break
+
+cap.release()
+cv2.destroyAllWindows()
